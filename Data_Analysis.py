@@ -1,13 +1,3 @@
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-0H7ZRMDBNW"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-0H7ZRMDBNW');
-</script>
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -40,6 +30,16 @@ from Data_visualisation import render_visualizations_page
 from Export_page import render_export_reports_page
 from sidebar import initialize_sidebar_state, render_modern_sidebar, render_python_editor, render_sql_editor
 from assistant_chat import render_chat
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-0H7ZRMDBNW"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-0H7ZRMDBNW');
+</script>
 
 # ── Page config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -157,3 +157,4 @@ elif selected_page == "💾 Export & Reports":
     render_export_reports_page()
 
     render_chat("💾 Export & Reports")
+
