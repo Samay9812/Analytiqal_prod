@@ -1,3 +1,13 @@
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-0H7ZRMDBNW"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-0H7ZRMDBNW');
+</script>
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -145,4 +155,5 @@ elif selected_page == "📊 Visualizations":
 
 elif selected_page == "💾 Export & Reports":
     render_export_reports_page()
+
     render_chat("💾 Export & Reports")
