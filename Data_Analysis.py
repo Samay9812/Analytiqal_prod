@@ -31,15 +31,20 @@ from Export_page import render_export_reports_page
 from sidebar import initialize_sidebar_state, render_modern_sidebar, render_python_editor, render_sql_editor
 from assistant_chat import render_chat
 
-<!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-0H7ZRMDBNW"></script>
+GA_MEASUREMENT_ID = "G-0H7ZRMDBNW"  # replace with your ID
+
+ga_code = f"""
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id={GA_MEASUREMENT_ID}"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
+  function gtag(){{dataLayer.push(arguments);}}
   gtag('js', new Date());
-
-  gtag('config', 'G-0H7ZRMDBNW');
+  gtag('config', '{GA_MEASUREMENT_ID}');
 </script>
+"""
+
+components.html(ga_code)
 
 # ── Page config ────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -157,4 +162,5 @@ elif selected_page == "💾 Export & Reports":
     render_export_reports_page()
 
     render_chat("💾 Export & Reports")
+
 
