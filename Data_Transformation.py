@@ -154,19 +154,17 @@ def render_sort_data_section(df: pd.DataFrame):
     st.markdown("### 🔢 Sort Dataset")
     st.caption("Order rows by column values")
 
-    sort_mode = st.radio("Sort by", ["Single Column", "Multiple Columns"],
-                         horizontal=True, key="sort_mode")
+    sort_single_tab, sort_multi_tab = st.tabs(["📌 Single Column", "📋 Multiple Columns"])
 
-    if sort_mode == "Single Column":
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            sort_col = st.selectbox("Column to sort by", df.columns, key="sort_single_col")
-        with col2:
-            ascending = st.radio("Order", ["Ascending ↑", "Descending ↓"],
-                                 key="sort_single_dir") == "Ascending ↑"
+    with sort_single_tab:
+        sort_col = st.selectbox("Column to sort by", df.columns, key="sort_single_col")
 
-        na_pos = st.radio("Missing values position", ["Last", "First"],
-                          horizontal=True, key="sort_na_pos")
+        c1, c2 = st.columns(2)
+        with c1:
+            sort_dir = st.selectbox("Order", ["Ascending ↑", "Descending ↓"], key="sort_single_dir")
+            ascending = sort_dir == "Ascending ↑"
+        with c2:
+            na_pos = st.selectbox("Missing values position", ["Last", "First"], key="sort_na_pos")
 
         try:
             sorted_df = df.sort_values(
@@ -185,7 +183,7 @@ def render_sort_data_section(df: pd.DataFrame):
         except Exception as e:
             st.error(f"Sort error: {e}")
 
-    else:
+    with sort_multi_tab:
         st.markdown("**Multi-Column Sort**")
 
         if 'sort_columns' not in st.session_state:
@@ -203,11 +201,13 @@ def render_sort_data_section(df: pd.DataFrame):
                     key=f"sort_mc_col_{idx}"
                 )
             with c2:
-                info['ascending'] = st.radio(
+                dir_choice = st.selectbox(
                     "Order", ["Ascending ↑", "Descending ↓"],
-                    key=f"sort_mc_dir_{idx}", horizontal=True
-                ) == "Ascending ↑"
+                    key=f"sort_mc_dir_{idx}"
+                )
+                info['ascending'] = dir_choice == "Ascending ↑"
             with c3:
+                st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🗑️", key=f"sort_mc_del_{idx}"):
                     st.session_state.sort_columns.pop(idx)
                     st.rerun()
@@ -238,10 +238,11 @@ def render_sample_data_section(df: pd.DataFrame):
     st.markdown("### 🎲 Sample Data")
     st.caption("Extract a random subset of rows")
 
-    method = st.radio("Sampling method", ["Fixed Count", "Percentage", "Stratified"],
-                      horizontal=True, key="samp_method")
+    samp_fixed_tab, samp_pct_tab, samp_strat_tab = st.tabs([
+        "🔢 Fixed Count", "📊 Percentage", "🎯 Stratified"
+    ])
 
-    if method == "Fixed Count":
+    with samp_fixed_tab:
         c1, c2 = st.columns([2, 1])
         with c1:
             n = st.slider("Rows to sample", 1, len(df), min(100, len(df)), 10, key="samp_n")
@@ -260,7 +261,7 @@ def render_sample_data_section(df: pd.DataFrame):
             st.success(f"✓ Sampled {n} rows")
             st.rerun()
 
-    elif method == "Percentage":
+    with samp_pct_tab:
         c1, c2 = st.columns([2, 1])
         with c1:
             pct = st.slider("Percentage", 1, 100, 10, 5, key="samp_pct")
@@ -279,44 +280,43 @@ def render_sample_data_section(df: pd.DataFrame):
             st.success(f"✓ Sampled {pct}%")
             st.rerun()
 
-    else:
+    with samp_strat_tab:
         from utils_robust import get_column_types
         col_types = get_column_types(df)
         if not col_types['categorical']:
             st.warning("⚠️ No categorical columns for stratification")
-            return
+        else:
+            c1, c2 = st.columns(2)
+            with c1:
+                strat_col = st.selectbox("Stratify by", col_types['categorical'], key="samp_strat_col")
+            with c2:
+                n = st.slider("Rows to sample", 1, len(df), min(100, len(df)), key="samp_strat_n")
 
-        c1, c2 = st.columns(2)
-        with c1:
-            strat_col = st.selectbox("Stratify by", col_types['categorical'], key="samp_strat_col")
-        with c2:
-            n = st.slider("Rows to sample", 1, len(df), min(100, len(df)), key="samp_strat_n")
+            seed = st.number_input("Seed", value=42, min_value=0, step=1, key="samp_strat_seed")
 
-        seed = st.number_input("Seed", value=42, min_value=0, step=1, key="samp_strat_seed")
+            try:
+                props = df[strat_col].value_counts(normalize=True)
+                st.dataframe(pd.DataFrame({
+                    'Class': props.index,
+                    'Proportion': props.values,
+                    'Original Count': df[strat_col].value_counts().values,
+                    'Sample Count': (props.values * n).astype(int)
+                }), use_container_width=True, hide_index=True)
 
-        try:
-            props = df[strat_col].value_counts(normalize=True)
-            st.dataframe(pd.DataFrame({
-                'Class': props.index,
-                'Proportion': props.values,
-                'Original Count': df[strat_col].value_counts().values,
-                'Sample Count': (props.values * n).astype(int)
-            }), use_container_width=True, hide_index=True)
+                sampled = df.groupby(strat_col, group_keys=False).apply(
+                    lambda x: x.sample(frac=n / len(df), random_state=int(seed))
+                ).reset_index(drop=True)
 
-            sampled = df.groupby(strat_col, group_keys=False).apply(
-                lambda x: x.sample(frac=n / len(df), random_state=int(seed))
-            ).reset_index(drop=True)
+                st.dataframe(sampled.head(20), use_container_width=True)
 
-            st.dataframe(sampled.head(20), use_container_width=True)
-
-            if st.button("✅ Apply Stratified Sample", type="primary",
-                         use_container_width=True, key="samp_apply_strat"):
-                from utils_robust import update_df
-                update_df(sampled, f"Stratified sample by {strat_col} ({len(sampled)} rows)")
-                st.success("✓ Stratified sampling applied!")
-                st.rerun()
-        except Exception as e:
-            st.error(f"Stratified sampling error: {e}")
+                if st.button("✅ Apply Stratified Sample", type="primary",
+                             use_container_width=True, key="samp_apply_strat"):
+                    from utils_robust import update_df
+                    update_df(sampled, f"Stratified sample by {strat_col} ({len(sampled)} rows)")
+                    st.success("✓ Stratified sampling applied!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Stratified sampling error: {e}")
 
 
 # ── Tab 4: Compute Columns ────────────────────────────────────────────────────
@@ -325,19 +325,18 @@ def render_compute_columns_section(df: pd.DataFrame):
     st.markdown("### ➕ Compute New Columns")
     st.caption("Create calculated columns from existing data")
 
-    comp_type = st.radio(
-        "Computation type",
-        ["Math Expression", "String Operations", "Date Operations", "Conditional Logic"],
-        horizontal=True, key="comp_type"
-    )
+    math_tab, str_tab, date_tab, cond_tab = st.tabs([
+        "🔢 Math Expression", "📝 String Operations",
+        "📅 Date Operations", "🔀 Conditional Logic"
+    ])
 
-    if comp_type == "Math Expression":
+    with math_tab:
         _render_math_computation(df)
-    elif comp_type == "String Operations":
+    with str_tab:
         _render_string_computation(df)
-    elif comp_type == "Date Operations":
+    with date_tab:
         _render_date_computation(df)
-    else:
+    with cond_tab:
         _render_conditional_computation(df)
 
 
@@ -595,14 +594,11 @@ def _render_conditional_computation(df):
 
     new_name = st.text_input("New column name", placeholder="category", key="cond_new_name")
 
-    cond_type = st.radio(
-        "Condition type",
-        ["Simple If-Else", "Multiple Conditions", "Binning"],
-        horizontal=True, key="cond_type"
-    )
+    cond_simple_tab, cond_multi_tab, cond_bin_tab = st.tabs([
+        "⚡ Simple If-Else", "📋 Multiple Conditions", "🗂️ Binning"
+    ])
 
-    # ── Simple If-Else ────────────────────────────────────────────────────
-    if cond_type == "Simple If-Else":
+    with cond_simple_tab:
         cond_col = st.selectbox("Condition column", df.columns, key="cond_simple_col")
         c1, c2 = st.columns(2)
         with c1:
@@ -636,8 +632,7 @@ def _render_conditional_computation(df):
                 from utils_robust import update_df
                 update_df(res, f"Created column: {new_name}"); st.success(f"✓ Created '{new_name}'"); st.rerun()
 
-    # ── Multiple Conditions ── IMPLEMENTED (was "coming soon") ────────────
-    elif cond_type == "Multiple Conditions":
+    with cond_multi_tab:
         st.caption("Define multiple if / else-if / else rules. Rules are evaluated top-to-bottom; first match wins.")
 
         if 'multi_cond_rules' not in st.session_state:
@@ -711,77 +706,75 @@ def _render_conditional_computation(df):
         elif not rules:
             st.info("Click 'Add Rule' to start building conditions")
 
-    # ── Binning ───────────────────────────────────────────────────────────
-    elif cond_type == "Binning":
+    with cond_bin_tab:
         from utils_robust import get_column_types
         numeric_cols = get_column_types(df)['numeric']
         if not numeric_cols:
-            st.warning("⚠️ No numeric columns for binning"); return
-
-        src = st.selectbox("Column to bin", numeric_cols, key="bin_src")
-        bin_method = st.radio("Binning method",
-            ["Equal Width", "Equal Frequency", "Custom Edges"],
-            horizontal=True, key="bin_method"
-        )
-
-        if bin_method == "Equal Width":
-            n_bins = st.slider("Number of bins", 2, 20, 5, key="bin_ew_n")
-            label_type = st.radio("Bin labels", ["Numeric (0,1,2…)", "Range strings (0.0–1.5)"],
-                                  horizontal=True, key="bin_ew_lbl")
-
-            if new_name:
-                _, edges = pd.cut(df[src], bins=n_bins, retbins=True)
-                if "Range" in label_type:
-                    labels = [f"{edges[i]:.2f}–{edges[i+1]:.2f}" for i in range(n_bins)]
-                    res = df.copy()
-                    res[new_name] = pd.cut(df[src], bins=n_bins, labels=labels)
-                else:
-                    res = df.copy()
-                    res[new_name] = pd.cut(df[src], bins=n_bins, labels=False)
-
-                st.write("**Bin edges:**", [f"{e:.3f}" for e in edges])
-                st.dataframe(res[[src, new_name]].head(10), use_container_width=True)
-
-                if st.button("✅ Create Column", type="primary", use_container_width=True, key="bin_ew_apply"):
-                    from utils_robust import update_df
-                    update_df(res, f"Created column: {new_name} (equal-width bins)")
-                    st.success(f"✓ Created '{new_name}'"); st.rerun()
-
-        elif bin_method == "Equal Frequency":
-            n_bins = st.slider("Number of bins", 2, 20, 5, key="bin_ef_n")
-            if new_name:
-                res = df.copy()
-                res[new_name] = pd.qcut(df[src], q=n_bins, labels=False, duplicates='drop')
-                st.dataframe(res[[src, new_name]].head(10), use_container_width=True)
-                st.write(res[new_name].value_counts().sort_index())
-                if st.button("✅ Create Column", type="primary", use_container_width=True, key="bin_ef_apply"):
-                    from utils_robust import update_df
-                    update_df(res, f"Created column: {new_name} (equal-frequency bins)")
-                    st.success(f"✓ Created '{new_name}'"); st.rerun()
-
+            st.warning("⚠️ No numeric columns for binning")
         else:
-            # ── Custom Edges ── IMPLEMENTED (was "coming soon") ──────────
-            st.caption("Enter your own bin boundaries. Values outside the range become NaN.")
+            src = st.selectbox("Column to bin", numeric_cols, key="bin_src")
 
-            col_min = float(df[src].min())
-            col_max = float(df[src].max())
-            st.info(f"Column range: {col_min:.3f} → {col_max:.3f}")
+            bin_ew_tab, bin_ef_tab, bin_ce_tab = st.tabs([
+                "📏 Equal Width", "📊 Equal Frequency", "✏️ Custom Edges"
+            ])
 
-            n_custom = st.slider("Number of boundaries (= bins + 1)", 2, 10, 4, key="bin_ce_n")
-            edges_input = []
+            with bin_ew_tab:
+                n_bins = st.slider("Number of bins", 2, 20, 5, key="bin_ew_n")
+                label_type = st.selectbox("Bin labels",
+                    ["Numeric (0,1,2…)", "Range strings (0.0–1.5)"], key="bin_ew_lbl")
 
-            st.markdown("**Enter boundary values:**")
-            cols = st.columns(n_custom)
-            for i, col_ in enumerate(cols):
-                default_edge = col_min + (col_max - col_min) * i / (n_custom - 1)
-                val = col_.number_input(
-                    f"Edge {i+1}", value=round(default_edge, 3),
-                    key=f"bin_edge_{i}"
-                )
-                edges_input.append(val)
+                if new_name:
+                    _, edges = pd.cut(df[src], bins=n_bins, retbins=True)
+                    if "Range" in label_type:
+                        labels = [f"{edges[i]:.2f}–{edges[i+1]:.2f}" for i in range(n_bins)]
+                        res = df.copy()
+                        res[new_name] = pd.cut(df[src], bins=n_bins, labels=labels)
+                    else:
+                        res = df.copy()
+                        res[new_name] = pd.cut(df[src], bins=n_bins, labels=False)
 
-            # Label customisation
-            n_bins_custom = n_custom - 1
+                    st.write("**Bin edges:**", [f"{e:.3f}" for e in edges])
+                    st.dataframe(res[[src, new_name]].head(10), use_container_width=True)
+
+                    if st.button("✅ Create Column", type="primary", use_container_width=True, key="bin_ew_apply"):
+                        from utils_robust import update_df
+                        update_df(res, f"Created column: {new_name} (equal-width bins)")
+                        st.success(f"✓ Created '{new_name}'"); st.rerun()
+
+            with bin_ef_tab:
+                n_bins = st.slider("Number of bins", 2, 20, 5, key="bin_ef_n")
+                if new_name:
+                    res = df.copy()
+                    res[new_name] = pd.qcut(df[src], q=n_bins, labels=False, duplicates='drop')
+                    st.dataframe(res[[src, new_name]].head(10), use_container_width=True)
+                    st.write(res[new_name].value_counts().sort_index())
+                    if st.button("✅ Create Column", type="primary", use_container_width=True, key="bin_ef_apply"):
+                        from utils_robust import update_df
+                        update_df(res, f"Created column: {new_name} (equal-frequency bins)")
+                        st.success(f"✓ Created '{new_name}'"); st.rerun()
+
+            with bin_ce_tab:
+                st.caption("Enter your own bin boundaries. Values outside the range become NaN.")
+
+                col_min = float(df[src].min())
+                col_max = float(df[src].max())
+                st.info(f"Column range: {col_min:.3f} → {col_max:.3f}")
+
+                n_custom = st.slider("Number of boundaries (= bins + 1)", 2, 10, 4, key="bin_ce_n")
+                edges_input = []
+
+                st.markdown("**Enter boundary values:**")
+                cols = st.columns(n_custom)
+                for i, col_ in enumerate(cols):
+                    default_edge = col_min + (col_max - col_min) * i / (n_custom - 1)
+                    val = col_.number_input(
+                        f"Edge {i+1}", value=round(default_edge, 3),
+                        key=f"bin_edge_{i}"
+                    )
+                    edges_input.append(val)
+
+                # Label customisation
+                n_bins_custom = n_custom - 1
             use_custom_labels = st.checkbox("Custom label names", value=False, key="bin_ce_labels_toggle")
             custom_labels = None
             if use_custom_labels:
@@ -846,27 +839,53 @@ def render_data_type_conversion():
 
     st.markdown("---")
 
-    type_map = {
-        "🔢 Numeric (int/float)": "numeric",
-        "📝 Text (string)":       "string",
-        "📅 DateTime":            "datetime",
-        "🏷️ Category":            "category",
-        "✅ Boolean":             "boolean"
-    }
+    type_tabs = st.tabs([
+        "🔢 Numeric", "📝 Text", "📅 DateTime", "🏷️ Category", "✅ Boolean"
+    ])
 
-    target_display = st.radio("Convert to", list(type_map.keys()),
-                               horizontal=True, key="dtype_target")
-    target_type = type_map[target_display]
-    opts = {}
-
-    if target_type == "numeric":
+    # ── Numeric tab ───────────────────────────────────────────────────────
+    with type_tabs[0]:
+        target_type = "numeric"
+        opts = {}
         c1, c2 = st.columns(2)
-        sub = c1.radio("Numeric type", ["Integer", "Float"], key="dtype_num_sub")
+        sub = c1.selectbox("Numeric type", ["Integer", "Float"], key="dtype_num_sub")
         opts['subtype'] = 'int' if sub == "Integer" else 'float'
-        err = c2.radio("Non-numeric values", ["Convert to NaN", "Keep as 0"], key="dtype_num_err")
+        err = c2.selectbox("Non-numeric values", ["Convert to NaN", "Keep as 0"], key="dtype_num_err")
         opts['errors'] = err
 
-    elif target_type == "datetime":
+        st.markdown("---")
+        if st.button("🔍 Preview Conversion", use_container_width=True, key="dtype_preview_btn_num"):
+            try:
+                preview_df = df.copy()
+                converted, rate = _convert_column_type(preview_df[target_col], target_type, opts)
+                preview_df[target_col] = converted
+                st.session_state.update({'dtype_preview': preview_df, 'dtype_success_rate': rate,
+                                         'dtype_target_col': target_col, 'dtype_type': target_type})
+            except Exception as e:
+                st.error(f"Conversion failed: {e}")
+        _render_dtype_preview(df, target_col)
+
+    # ── Text tab ──────────────────────────────────────────────────────────
+    with type_tabs[1]:
+        target_type = "string"
+        opts = {}
+        st.info("All values will be converted to text strings. This conversion always succeeds.")
+        st.markdown("---")
+        if st.button("🔍 Preview Conversion", use_container_width=True, key="dtype_preview_btn_str"):
+            try:
+                preview_df = df.copy()
+                converted, rate = _convert_column_type(preview_df[target_col], target_type, opts)
+                preview_df[target_col] = converted
+                st.session_state.update({'dtype_preview': preview_df, 'dtype_success_rate': rate,
+                                         'dtype_target_col': target_col, 'dtype_type': target_type})
+            except Exception as e:
+                st.error(f"Conversion failed: {e}")
+        _render_dtype_preview(df, target_col)
+
+    # ── DateTime tab ──────────────────────────────────────────────────────
+    with type_tabs[2]:
+        target_type = "datetime"
+        opts = {}
         samples = df[target_col].dropna().astype(str).head(20).tolist()
         detected = _detect_date_formats(samples)
         if detected:
@@ -888,7 +907,42 @@ def render_data_type_conversion():
             mf = st.text_input("Extra format to try", placeholder="%Y/%m/%d", key="dtype_dt_manual")
             opts['manual_format'] = mf or None
 
-    elif target_type == "boolean":
+        st.markdown("---")
+        if st.button("🔍 Preview Conversion", use_container_width=True, key="dtype_preview_btn_dt"):
+            try:
+                preview_df = df.copy()
+                converted, rate = _convert_column_type(preview_df[target_col], target_type, opts)
+                preview_df[target_col] = converted
+                st.session_state.update({'dtype_preview': preview_df, 'dtype_success_rate': rate,
+                                         'dtype_target_col': target_col, 'dtype_type': target_type})
+            except Exception as e:
+                st.error(f"Conversion failed: {e}")
+        _render_dtype_preview(df, target_col)
+
+    # ── Category tab ──────────────────────────────────────────────────────
+    with type_tabs[3]:
+        target_type = "category"
+        opts = {}
+        unique_count = df[target_col].nunique()
+        pct = unique_count / len(df) * 100
+        st.info(f"Column has **{unique_count:,}** unique values ({pct:.1f}% of rows). "
+                f"Category type is most efficient when < 50% unique.")
+        st.markdown("---")
+        if st.button("🔍 Preview Conversion", use_container_width=True, key="dtype_preview_btn_cat"):
+            try:
+                preview_df = df.copy()
+                converted, rate = _convert_column_type(preview_df[target_col], target_type, opts)
+                preview_df[target_col] = converted
+                st.session_state.update({'dtype_preview': preview_df, 'dtype_success_rate': rate,
+                                         'dtype_target_col': target_col, 'dtype_type': target_type})
+            except Exception as e:
+                st.error(f"Conversion failed: {e}")
+        _render_dtype_preview(df, target_col)
+
+    # ── Boolean tab ───────────────────────────────────────────────────────
+    with type_tabs[4]:
+        target_type = "boolean"
+        opts = {}
         c1, c2 = st.columns(2)
         with c1:
             opts['output_format'] = st.selectbox("Output format", [
@@ -898,31 +952,32 @@ def render_data_type_conversion():
                 "Custom values..."
             ], key="dtype_bool_fmt")
         with c2:
-            opts['errors'] = st.radio("Invalid values", ["Convert to NaN", "Treat as False"],
-                                       key="dtype_bool_err")
+            opts['errors'] = st.selectbox("Invalid values",
+                ["Convert to NaN", "Treat as False"], key="dtype_bool_err")
         if "Custom" in opts['output_format']:
             c1, c2 = st.columns(2)
             opts['custom_true']  = c1.text_input("True value",  value="Active",   key="dtype_bool_ct")
             opts['custom_false'] = c2.text_input("False value", value="Inactive", key="dtype_bool_cf")
 
-    st.markdown("---")
+        st.markdown("---")
+        if st.button("🔍 Preview Conversion", use_container_width=True, key="dtype_preview_btn_bool"):
+            try:
+                preview_df = df.copy()
+                converted, rate = _convert_column_type(preview_df[target_col], target_type, opts)
+                preview_df[target_col] = converted
+                st.session_state.update({'dtype_preview': preview_df, 'dtype_success_rate': rate,
+                                         'dtype_target_col': target_col, 'dtype_type': target_type})
+            except Exception as e:
+                st.error(f"Conversion failed: {e}")
+        _render_dtype_preview(df, target_col)
 
-    if st.button("🔍 Preview Conversion", use_container_width=True, key="dtype_preview_btn"):
-        try:
-            preview_df = df.copy()
-            converted, rate = _convert_column_type(preview_df[target_col], target_type, opts)
-            preview_df[target_col] = converted
-            st.session_state['dtype_preview']      = preview_df
-            st.session_state['dtype_success_rate'] = rate
-            st.session_state['dtype_target_col']   = target_col
-            st.session_state['dtype_type']         = target_type
-        except Exception as e:
-            st.error(f"Conversion failed: {e}")
-            import traceback; st.code(traceback.format_exc())
 
+def _render_dtype_preview(df, target_col):
+    """Shared preview/apply block for data type conversion."""
     if st.session_state.get('dtype_preview') is not None:
         preview_df = st.session_state['dtype_preview']
         rate = st.session_state.get('dtype_success_rate', 0)
+        saved_type = st.session_state.get('dtype_type', '')
 
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Original Type", str(df[target_col].dtype))
@@ -945,15 +1000,16 @@ def render_data_type_conversion():
 
         c1, c2 = st.columns([3, 1])
         with c1:
-            if st.button("✅ Apply Conversion", type="primary", use_container_width=True, key="dtype_apply"):
+            if st.button("✅ Apply Conversion", type="primary", use_container_width=True,
+                         key=f"dtype_apply_{saved_type}"):
                 from utils_robust import update_df
-                _register_transform(target_col, f"dtype→{target_type}")
-                update_df(preview_df, f"Converted '{target_col}' to {target_type}")
+                _register_transform(target_col, f"dtype→{saved_type}")
+                update_df(preview_df, f"Converted '{target_col}' to {saved_type}")
                 for k in ['dtype_preview','dtype_success_rate','dtype_target_col','dtype_type']:
                     st.session_state[k] = None
                 st.success("✅ Conversion applied!"); st.rerun()
         with c2:
-            if st.button("❌ Cancel", use_container_width=True, key="dtype_cancel"):
+            if st.button("❌ Cancel", use_container_width=True, key=f"dtype_cancel_{saved_type}"):
                 for k in ['dtype_preview','dtype_success_rate','dtype_target_col','dtype_type']:
                     st.session_state[k] = None
                 st.rerun()
